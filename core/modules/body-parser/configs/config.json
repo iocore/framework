@@ -1,0 +1,5 @@
+{
+  "dependencies": [
+    "iocore/core/modules/cookie-parser"
+  ]
+}
