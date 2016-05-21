@@ -6,6 +6,9 @@ import * as shell from 'shelljs';
  * desired shell commands
  *
  * Also provides logging methods, NPM methods, can run other commands
+ *
+ * @link https://www.npmjs.com/package/shelljs
+ * @link http://momentjs.com/docs/
  */
 export class BaseCommand {
 
@@ -36,11 +39,6 @@ export class BaseCommand {
         return this;
     }
 
-    npm(...args)
-    {
-        return this.shell('npm ' + args);
-    }
-
     shell(...args)
     {
         return shell.exec(args.join(' ')).code;
@@ -65,5 +63,16 @@ export class BaseCommand {
     runCommands(commands)
     {
         // TODO: run commands without regarding of their result
+    }
+
+    log(message)
+    {
+        // TODO: should we extract logging to separate module?
+        //this.container.log(message);
+    }
+
+    error(message)
+    {
+        //this.container.error(message);
     }
 }

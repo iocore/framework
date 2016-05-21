@@ -18,14 +18,16 @@ export class Bootstrap {
      *
      * Example of subscribing:
      *
-     *      return {
-     *          constants.KERNEL_EVENT_MODULES_REGISTERED: {
-     *              priority: constants.PRIORITY_NORMAL,
-     *              callback: (arg1, arg2, ...args) -> {
-     *                  // Do here whatever you want
-     *              }
-     *          }
-     *      }
+     *      let eventsMap = {};
+
+            eventsMap[constants.KERNEL_EVENT_EXPRESS_READY] = {
+                priority: constants.PRIORITY_NORMAL,
+                callback: () => {
+                    this.init();
+                }
+            };
+
+            return eventsMap;
      *
      * @returns Object
      */

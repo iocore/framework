@@ -8,8 +8,8 @@ export class Bootstrap extends ioCore.Bootstrap {
 
     init() {
         console.log('Installing body parser');
-        this.container.app.use(bodyParser.json());
-		this.container.app.use(bodyParser.urlencoded({ extended: false }));
+        //this.container.app.use(bodyParser.json());
+		//this.container.app.use(bodyParser.urlencoded({ extended: false }));
     }
 
     onKernelEventsSubscribe()

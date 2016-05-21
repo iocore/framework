@@ -1,10 +1,13 @@
 import { BaseCommand } from 'iocore/commands/base';
 
 export class ServerCommand extends BaseCommand {
+
+    /**
+     * Bootstrap and listen
+     */
     run()
     {
-        console.log('Running server');
+        this.log('Running server');
         this.container.bootstrap().listen();
-        //return this.shell('ls');
     }
 }
