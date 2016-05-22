@@ -8,14 +8,15 @@ import * as http from 'http';
 import * as https from 'https';
 import { EventEmitter } from 'events';
 import { first, last, initial } from 'underscore';
-import { green, red } from 'colors';
-import * as moment from 'moment';
+import * as colors from 'colors';
+let moment = require('moment');
 import * as constants from './core/constants';
 
 /**
  * Main framework class
  */
-export class ioCore extends EventEmitter {
+export class ioCore extends EventEmitter
+{
 
     /**
      * Framework core constructor
@@ -24,11 +25,13 @@ export class ioCore extends EventEmitter {
      * @param cwd Application root folder
      * @param args
      */
-    constructor(env, cwd, ...args) {
+    constructor(env, cwd, ...args)
+    {
         super(...args);
         this.env = env || constants.ENV_PRODUCTION;
         this.cwd = cwd || process.cwd();
         this.modulesCache = {};
+        this.modulesDependenciesCache = {};
         this.commandsClassesInstancesCache = {};
         this.kernelListeners = {};
         this.httpServer = null;
@@ -40,11 +43,12 @@ export class ioCore extends EventEmitter {
      *
      * @returns {ioCore}
      */
-    bootstrap() {
-        // Registering module recursive process starts
-        // from current working folder, which should be
-        // app's folder
-        this.registerModules(this.cwd);
+    bootstrap()
+    {
+        this.log('Bootstrapping..');
+
+        // Initiating modules bootstrapping
+        this.bootstrapModules(this.cwd);
         this.runKernelEvent(constants.KERNEL_EVENT_MODULES_REGISTERED);
 
         // Place here some other initialisation
@@ -58,7 +62,8 @@ export class ioCore extends EventEmitter {
      *
      * @returns {ioCore}
      */
-    listen() {
+    listen()
+    {
 
         // Initialising HTTP server
         let httpSettings = {
@@ -106,7 +111,8 @@ export class ioCore extends EventEmitter {
      * @param req
      * @param res
      */
-    dispatcher(req, res) {
+    dispatcher(req, res)
+    {
         // TODO: pre-dispatch hook
         // TODO: run middlewares arranged by priorities
         // TODO: instantiate request and response singletones
@@ -120,7 +126,8 @@ export class ioCore extends EventEmitter {
         // TODO: post-dispatch hook
     }
 
-    isModuleBootstrapped(moduleName) {
+    isModuleBootstrapped(moduleName)
+    {
         this.checkModuleInCache(moduleName);
         return this.modulesCache[moduleName].hasOwnProperty('bootstrapInstance');
     }
@@ -128,41 +135,53 @@ export class ioCore extends EventEmitter {
     /**
      * Recursively registering modules
      *
-     * @param moduleName
+     * @param rootModuleName
      * @returns {ioCore}
      */
-    registerModules(moduleName) {
-        if (this.isModuleBootstrapped(moduleName)) {
-            return this;
-        }
+    bootstrapModules(rootModuleName)
+    {
+        this.iterateOverModules(rootModuleName, (moduleName) => {
+            if (this.isModuleBootstrapped(moduleName)) {
+                return this;
+            }
 
-        let dependencies = this.getModuleDependencies(moduleName);
+            this.log(`Registering module: ${moduleName}`);
 
-        dependencies.forEach(dependency => {
-            this.registerModules(dependency);
+            let moduleInstance = require(moduleName);
+
+            if (!moduleInstance.Bootstrap) {
+                throw Error(this.error(`Module "${moduleName}" does not seems like a valid module, Bootstrap object expected`, true));
+            }
+
+            this.modulesCache[moduleName]['bootstrapInstance'] = new moduleInstance.Bootstrap(this);
+
+            this.subscribeModuleToKernelEvents(moduleName);
+
+            // TODO: read and compile configuration
+            // TODO: setup views folder
+            // TODO: setup routes (params, controllers, views)
         });
-
-        console.log('Registering module: ', moduleName);
-
-        let moduleInstance = require(moduleName);
-
-        if (!moduleInstance.Bootstrap) {
-            throw Error('Module `' + moduleName + '` does not seems like a valid module, Bootstrap object expected');
-        }
-
-        this.modulesCache[moduleName]['bootstrapInstance'] = new moduleInstance.Bootstrap(this);
-
-        this.subscribeModuleToKernelEvents(moduleName);
-
-        // TODO: read and compile configuration
-        // TODO: setup views folder
-        // TODO: setup routes (params, controllers, views)
-
         return this;
     }
 
-    iterateOverModules(moduleName, moduleInstanceCallback) {
-        // TODO: iterate over modules to get commands, or assetics, or configs
+    /**
+     * Recursively iterate over all the dependency tree of modules
+     * and call callback for each of them
+     *
+     * TODO: add infinity recursion protection
+     *
+     * @param moduleName
+     * @param moduleInstanceCallback
+     */
+    iterateOverModules(moduleName, moduleInstanceCallback)
+    {
+        let dependencies = this.getModuleDependencies(moduleName);
+
+        dependencies.forEach(dependency => {
+            this.iterateOverModules(dependency, moduleInstanceCallback);
+        });
+
+        moduleInstanceCallback(moduleName);
     }
 
     /**
@@ -171,7 +190,8 @@ export class ioCore extends EventEmitter {
      * @param moduleName
      * @returns {ioCore}
      */
-    subscribeModuleToKernelEvents(moduleName) {
+    subscribeModuleToKernelEvents(moduleName)
+    {
         let kernelSubscriptions = this.modulesCache[moduleName]['bootstrapInstance'].onKernelEventsSubscribe();
 
         Reflect.ownKeys(kernelSubscriptions).forEach((eventName) => {
@@ -195,12 +215,14 @@ export class ioCore extends EventEmitter {
      *
      * @returns {ioCore}
      */
-    clearKernelListeners() {
+    clearKernelListeners()
+    {
         this.kernelListeners = {};
         return this;
     }
 
-    runKernelEvent(eventName, ...args) {
+    runKernelEvent(eventName, ...args)
+    {
         if (!this.kernelListeners[eventName]) {
             return;
         }
@@ -220,7 +242,8 @@ export class ioCore extends EventEmitter {
      *
      * @param moduleName
      */
-    checkModuleInCache(moduleName) {
+    checkModuleInCache(moduleName)
+    {
         if (!this.modulesCache[moduleName]) {
             this.modulesCache[moduleName] = {};
         }
@@ -232,7 +255,8 @@ export class ioCore extends EventEmitter {
      * @param moduleName
      * @returns String
      */
-    getModuleFolder(moduleName) {
+    getModuleFolder(moduleName)
+    {
         this.checkModuleInCache(moduleName);
         if (!this.modulesCache[moduleName]['baseFolder']) {
             this.modulesCache[moduleName]['baseFolder'] = path.dirname(require.resolve(moduleName));
@@ -249,10 +273,15 @@ export class ioCore extends EventEmitter {
      *
      * @param configFileName
      * @param extension
+     * @param useEnv
      * @returns {*}
      */
-    getConfigFilename(configFileName = 'config', extension = constants.DEFAULT_CONFIG_EXT) {
-        if (this.env !== constants.ENV_PRODUCTION) {
+    getConfigFilename(
+        configFileName='config',
+        extension=constants.DEFAULT_CONFIG_EXT,
+        useEnv=true
+    ) {
+        if (this.env !== constants.ENV_PRODUCTION && useEnv) {
             configFileName += '_' + this.env;
         }
         configFileName += extension;
@@ -265,11 +294,20 @@ export class ioCore extends EventEmitter {
      * @param moduleName
      * @param configFileName
      * @param extension
+     * @param useEnv
      * @returns {{}|*}
      */
-    getModuleConfig(moduleName, configFileName = 'config', extension = constants.DEFAULT_CONFIG_EXT) {
+    getModuleConfig(
+        moduleName,
+        configFileName='config',
+        extension=constants.DEFAULT_CONFIG_EXT,
+        useEnv=true
+    ) {
         let baseFolder = this.getModuleFolder(moduleName);
-        let configFilePath = path.join(baseFolder, this.getConfigFilename(configFileName, extension));
+        let configFilePath = path.join(
+            baseFolder,
+            this.getConfigFilename(configFileName, extension, useEnv)
+        );
         return ioCore.readModuleConfigJson(configFilePath);
     }
 
@@ -279,7 +317,8 @@ export class ioCore extends EventEmitter {
      * @param configFileName
      * @returns {*}
      */
-    static readModuleConfigJson(configFileName) {
+    static readModuleConfigJson(configFileName)
+    {
         try {
             return JSON.parse(fs.readFileSync(configFileName));
         } catch (e) {
@@ -288,12 +327,22 @@ export class ioCore extends EventEmitter {
     }
 
     /**
-     * Returns contents of module config bootstrap section
+     * Returns contents of module dependencies.json
      *
      * @returns Object
      */
-    getModuleDependencies(moduleName) {
-        return this.getModuleConfig(moduleName).dependencies || [];
+    getModuleDependencies(moduleName)
+    {
+        if (this.modulesDependenciesCache.hasOwnProperty(moduleName)) {
+            return this.modulesDependenciesCache[moduleName];
+        }
+        this.modulesDependenciesCache[moduleName] = this.getModuleConfig(
+                moduleName,
+                'dependencies',
+                constants.DEFAULT_CONFIG_EXT
+            ).dependencies || [];
+
+        return this.modulesDependenciesCache[moduleName];
     }
 
     /**
@@ -301,7 +350,8 @@ export class ioCore extends EventEmitter {
      *
      * @returns Object
      */
-    registerModuleCommands(moduleName) {
+    registerModuleCommands(moduleName)
+    {
 
     }
 
@@ -312,10 +362,17 @@ export class ioCore extends EventEmitter {
      *      >iocore iocore:server:run       // internal framework command
      *      >iocore iocore-assetic:dump     // other installed module command
      *
+     * Commands can receive arguments:
+     *      >iocore iocore:sever:run 127.0.0.1 3000
+     *
+     * In this case method should be declared like this:
+     *      run(server='127.0.0.1', port=80) {...}
+     *
      * @param command
      * @returns {}
      */
-    runCommand(command, ...args) {
+    runCommand(command, ...args)
+    {
         command = this.getCommandInstance(command);
         let commandMethod = command.classInstance[command.method];
         return commandMethod.bind(command.classInstance)(...args);
@@ -327,7 +384,8 @@ export class ioCore extends EventEmitter {
      * @param command
      * @returns {*}
      */
-    getCommandInstance(command) {
+    getCommandInstance(command)
+    {
         try {
             let commandInfo = ioCore.getCommandInfo(command);
 
@@ -338,7 +396,6 @@ export class ioCore extends EventEmitter {
                     classInstance: this.commandsClassesInstancesCache[command]
                 }
             }
-
 
             let commandModule = require(commandInfo.path);
 
@@ -360,7 +417,8 @@ export class ioCore extends EventEmitter {
      * @param command
      * @return {method,_class,path}
      */
-    static getCommandInfo(command) {
+    static getCommandInfo(command)
+    {
         let commandSections = command.split(':');
 
         // Adding commands/ folder to sections to composite it right way
@@ -388,5 +446,43 @@ export class ioCore extends EventEmitter {
             _class: commandClass,
             path: commandPath
         }
+    }
+
+    /**
+     * Writes to stdout log message
+     * If isReturned parameter is provided then message should be returned instead of wrote to stdout
+     *
+     * @param message
+     * @param isReturned
+     * @returns {*}
+     */
+    log(message, isReturned=false)
+    {
+        let currentTimestamp = moment().format();
+        let log = `\n[${currentTimestamp}] `.bold.green + `${message}`.green;
+        if (isReturned)
+        {
+            return log;
+        }
+        process.stdout.write(log);
+    }
+
+    /**
+     * Writes to stderr log message
+     * If isReturned parameter is provided then message should be returned instead of wrote to stderr
+     *
+     * @param message
+     * @param isReturned
+     * @returns {*}
+     */
+    error(message, isReturned=false)
+    {
+        let currentTimestamp = moment().format();
+        let log = `\n[${currentTimestamp}] `.bold.red + `${message}`.red;
+        if (isReturned)
+        {
+            return log;
+        }
+        process.stderr.write(log);
     }
 }

@@ -14,8 +14,8 @@ export class BaseCommand {
 
     constructor()
     {
-        this.args = {};
         this.container = null;
+        this.shell = shell;
     }
 
     /**
@@ -23,25 +23,28 @@ export class BaseCommand {
      *
      * @param container ioCore
      */
-    setContainer(container) {
+    setContainer(container)
+    {
         this.container = container;
         return this;
     }
 
     /**
-     * Setting up CLI arguments
+     * Runs available shell command (supportable by shelljs)
+     * and passing arguments to it.
+     * Arguments will be joined
      *
-     * @param arguments
+     * @param command
+     * @param args
+     * @returns {*} result code
      */
-    setArguments(...args) {
-        // TODO: Arguments are options from the CLI
-
-        return this;
-    }
-
-    shell(...args)
+    shell(command, ...args)
     {
-        return shell.exec(args.join(' ')).code;
+        if (this.shell.hasOwnProperty(command)) {
+            return this.shell[command](args.join(' ')).code;
+        }
+        this.error(`Shelljs does not support command "${command}"`);
+        return 1;
     }
 
     /**
@@ -55,24 +58,64 @@ export class BaseCommand {
         return this.container.runCommand(command, ...args);
     }
 
+    /**
+     * Running bunch of commands and check if all of them has been finished successfully
+     *
+     * @param commands
+     * @returns {BaseCommand}
+     */
     runCommandsBunch(commands)
     {
-        // TODO: run bunch of commands and continue next only if previous finished successfully
+        Reflect.ownKeys(commands).forEach((command) => {
+            let args = commands[command];
+            let result = this.runCommand(command, ...args);
+
+            // If result is true (or positive integer)
+            // Then it's error
+            if (result) {
+                result = JSON.stringify(result);
+                this.error(`Command failed: ${command}. Result: ${result}`);
+                return 1;
+            }
+        });
     }
 
+    /**
+     * Running few commands without regarding of their result
+     *
+     * @param commands
+     * @returns {BaseCommand}
+     */
     runCommands(commands)
     {
-        // TODO: run commands without regarding of their result
+        Reflect.ownKeys(commands).forEach((command) => {
+            let args = commands[command];
+            this.runCommand(command, ...args);
+        });
+        return this;
     }
 
+    /**
+     * Writing log to stdout
+     *
+     * @param message
+     * @returns {BaseCommand}
+     */
     log(message)
     {
-        // TODO: should we extract logging to separate module?
-        //this.container.log(message);
+        this.container.log(message);
+        return this;
     }
 
+    /**
+     * Writing log to stderr
+     *
+     * @param message
+     * @returns {BaseCommand}
+     */
     error(message)
     {
-        //this.container.error(message);
+        this.container.error(message);
+        return this;
     }
 }
