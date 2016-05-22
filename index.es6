@@ -217,7 +217,7 @@ export class ioCore extends EventEmitter
      */
     setupDispatchHooks(rootModuleName=this.cwd)
     {
-        this.log('\t- Setting up pre and post dispatch hooks');
+        this.log('\t- Setup dispatch hooks');
         this.iterateOverModules(rootModuleName, (moduleName) => {
             // TODO
         });
