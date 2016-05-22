@@ -47,9 +47,9 @@ export class ioCore extends EventEmitter {
         this.registerModules(this.cwd);
         this.runKernelEvent(constants.KERNEL_EVENT_MODULES_REGISTERED);
 
+        // Place here some other initialisation
 
-        this.runKernelEvent(constants.KERNEL_EVENT_SERVER_READY);
-        // TODO: fire pre and post dispatch events
+        this.runKernelEvent(constants.KERNEL_EVENT_BOOTSTRAP_READY);
         return this;
     }
 
@@ -329,31 +329,24 @@ export class ioCore extends EventEmitter {
      */
     getCommandInstance(command) {
         try {
-            let commandSections = command.split(':');
-            commandSections.splice(1, 0, 'commands');
-            let commandMethodName = last(commandSections);
+            let commandInfo = ioCore.getCommandInfo(command);
 
             // If we have class instance cached then it's enough for us to return
             if (this.commandsClassesInstancesCache.hasOwnProperty(command)) {
                 return {
-                    method: commandMethodName,
+                    method: commandInfo.method,
                     classInstance: this.commandsClassesInstancesCache[command]
                 }
             }
 
-            commandSections = initial(commandSections);
-            let commandFileName = last(commandSections);
-            let commandClass = commandFileName.charAt(0).toUpperCase()
-                + commandFileName.substring(1).toLowerCase() + 'Command';
 
-            let commandPath = commandSections.join(path.sep);
-            let commandModule = require(commandPath);
+            let commandModule = require(commandInfo.path);
 
             // Caching command class instance
-            this.commandsClassesInstancesCache[command] = new commandModule[commandClass]().setContainer(this);
+            this.commandsClassesInstancesCache[command] = new commandModule[commandInfo._class]().setContainer(this);
 
             return {
-                method: commandMethodName,
+                method: commandInfo.method,
                 classInstance: this.commandsClassesInstancesCache[command]
             }
         } catch (e) {
@@ -365,8 +358,35 @@ export class ioCore extends EventEmitter {
      * Getting command information to write it when user requesting help over commands
      *
      * @param command
+     * @return {method,_class,path}
      */
-    getCommandInfo(command) {
+    static getCommandInfo(command) {
+        let commandSections = command.split(':');
 
+        // Adding commands/ folder to sections to composite it right way
+        commandSections.splice(1, 0, 'commands');
+
+        // Extracting method name
+        let commandMethodName = last(commandSections);
+
+        // Removing method name from sections
+        commandSections = initial(commandSections);
+
+        // Extracting filename
+        let commandFileName = last(commandSections);
+
+        // Compiling class name. For example if command is "server" then command class would be "ServerCommand"
+        let commandClass = commandFileName.charAt(0).toUpperCase()
+            + commandFileName.substring(1).toLowerCase() + 'Command';
+
+        // Path to the command class file
+        // For example if command is "server" in module "iocore" then path would be "iocore/commands/server"
+        let commandPath = commandSections.join(path.sep);
+
+        return {
+            method: commandMethodName,
+            _class: commandClass,
+            path: commandPath
+        }
     }
 }
