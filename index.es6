@@ -34,8 +34,17 @@ export class ioCore extends EventEmitter
         this.modulesDependenciesCache = {};
         this.commandsClassesInstancesCache = {};
         this.kernelListeners = {};
+        this.preDispatchHooks = {};
+        this.postDispatchHooks = {};
         this.httpServer = null;
         this.httpsServer = null;
+
+        this.log('------------------------');
+        this.log('│   ┬┌─┐╔═╗┌─┐┬─┐┌─┐   │');
+        this.log('│   ││ │║  │ │├┬┘├┤    │');
+        this.log('│   ┴└─┘╚═╝└─┘┴└─└─┘   │');
+        this.log('│   http://iocore.org  │');
+        this.log('------------------------');
     }
 
     /**
@@ -45,13 +54,14 @@ export class ioCore extends EventEmitter
      */
     bootstrap()
     {
-        this.log('Bootstrapping..');
+        this.log('Bootstrapping:');
 
         // Initiating modules bootstrapping
-        this.bootstrapModules(this.cwd);
+        this.bootstrapModules();
         this.runKernelEvent(constants.KERNEL_EVENT_MODULES_REGISTERED);
 
-        // Place here some other initialisation
+        this.setupDispatchHooks();
+        this.runKernelEvent(constants.KERNEL_EVENT_DISPATCH_HOOKS_READY);
 
         this.runKernelEvent(constants.KERNEL_EVENT_BOOTSTRAP_READY);
         return this;
@@ -62,15 +72,31 @@ export class ioCore extends EventEmitter
      *
      * @returns {ioCore}
      */
-    listen()
+    listen(httpCallback=null, httpsCallback=null)
     {
-
-        // Initialising HTTP server
         let httpSettings = {
-            port: 3000
+            port: 3000,
+            host: '127.0.0.1',
+            callback: httpCallback ? httpCallback : function(){}
         };
         this.runKernelEvent(constants.KERNEL_EVENT_HTTP_SERVER_SETTINGS_READY, httpSettings);
-        this.httpServer = http.createServer(this.dispatcher).listen(httpSettings.port);
+
+        let httpsSettings = {
+            port: 443,
+            host: '127.0.0.1',
+            callback: httpsCallback ? httpsCallback : function(){}
+        };
+        this.runKernelEvent(constants.KERNEL_EVENT_HTTPS_SERVER_SETTINGS_READY, httpsSettings);
+
+        this.httpServer = http.createServer(this.dispatcher)
+            .listen(
+                httpSettings.port,
+                httpSettings.host,
+                () => {
+                    httpSettings.callback(httpSettings)
+                }
+            );
+
         this.runKernelEvent(constants.KERNEL_EVENT_HTTP_SERVER_READY, this.httpServer);
 
         // Initialising HTTPS server
@@ -79,9 +105,6 @@ export class ioCore extends EventEmitter
          port: 443,
          serverOptions: {}
          };
-
-         this.runKernelEvent(constants.KERNEL_EVENT_HTTPS_SERVER_SETTINGS_READY, httpsSettings);
-
          this.httpsServer =
          https.createServer(httpsSettings.serverOptions, this.dispatcher)
          .listen(httpsSettings.port);
@@ -113,7 +136,8 @@ export class ioCore extends EventEmitter
      */
     dispatcher(req, res)
     {
-        // TODO: pre-dispatch hook
+        this.runPreDispatchHooks(req, res);
+
         // TODO: run middlewares arranged by priorities
         // TODO: instantiate request and response singletones
         // TODO: check what URL and other request information
@@ -124,6 +148,33 @@ export class ioCore extends EventEmitter
         res.end('Hello World\n');
 
         // TODO: post-dispatch hook
+    }
+
+    /**
+     * Running http pre-dispatch hook
+     * Here all the installed middlewares will be dispatched in following sequence:
+     * 1) by priority from highest to lowest
+     * 2) by subscribing order in specified priority
+     *
+     * This will allow to use all existing today middlewares, as well as Express middlewares
+     *
+     * @param req
+     * @param res
+     */
+    runPreDispatchHooks(req, res)
+    {
+        if (!this.kernelListeners[eventName]) {
+            return;
+        }
+
+        for (let priority = constants.PRIORITY_HIGHEST; priority <= constants.PRIORITY_LOWEST; priority++) {
+            let eventSubscribers = this.kernelListeners[eventName][priority] || [];
+            eventSubscribers.forEach((subscriber) => {
+                if (subscriber.callback && typeof subscriber.callback === 'function') {
+                    subscriber.callback(...args);
+                }
+            });
+        }
     }
 
     isModuleBootstrapped(moduleName)
@@ -138,14 +189,13 @@ export class ioCore extends EventEmitter
      * @param rootModuleName
      * @returns {ioCore}
      */
-    bootstrapModules(rootModuleName)
+    bootstrapModules(rootModuleName=this.cwd)
     {
+        this.log('\t- Registering modules');
         this.iterateOverModules(rootModuleName, (moduleName) => {
             if (this.isModuleBootstrapped(moduleName)) {
                 return this;
             }
-
-            this.log(`Registering module: ${moduleName}`);
 
             let moduleInstance = require(moduleName);
 
@@ -154,12 +204,22 @@ export class ioCore extends EventEmitter
             }
 
             this.modulesCache[moduleName]['bootstrapInstance'] = new moduleInstance.Bootstrap(this);
-
             this.subscribeModuleToKernelEvents(moduleName);
+        });
+        return this;
+    }
 
-            // TODO: read and compile configuration
-            // TODO: setup views folder
-            // TODO: setup routes (params, controllers, views)
+    /**
+     * Setting up pre and post dispatch hooks (ie middlewares)
+     *
+     * @param rootModuleName
+     * @returns {ioCore}
+     */
+    setupDispatchHooks(rootModuleName=this.cwd)
+    {
+        this.log('\t- Setting up pre and post dispatch hooks');
+        this.iterateOverModules(rootModuleName, (moduleName) => {
+            // TODO
         });
         return this;
     }
@@ -192,6 +252,13 @@ export class ioCore extends EventEmitter
      */
     subscribeModuleToKernelEvents(moduleName)
     {
+        if (!this.modulesCache[moduleName]['bootstrapInstance'].onKernelEventsSubscribe
+            || typeof this.modulesCache[moduleName]['bootstrapInstance'].onKernelEventsSubscribe !== 'function'
+        ) {
+            let errorMessage = this.error(`Bootstrap class in module ${moduleName} should be inherited from iocore/core/bootstrap class`, true);
+            throw new Error(errorMessage);
+        }
+
         let kernelSubscriptions = this.modulesCache[moduleName]['bootstrapInstance'].onKernelEventsSubscribe();
 
         Reflect.ownKeys(kernelSubscriptions).forEach((eventName) => {
@@ -281,7 +348,7 @@ export class ioCore extends EventEmitter
         extension=constants.DEFAULT_CONFIG_EXT,
         useEnv=true
     ) {
-        if (this.env !== constants.ENV_PRODUCTION && useEnv) {
+        if (useEnv && this.env !== constants.ENV_PRODUCTION) {
             configFileName += '_' + this.env;
         }
         configFileName += extension;
@@ -327,20 +394,42 @@ export class ioCore extends EventEmitter
     }
 
     /**
-     * Returns contents of module dependencies.json
+     * Returns contents of module dependencies[_{env}].json
+     * Like all the other json configs production dependencies
+     * are located in dependencies.json
+     * When all the other environment-specified dependencies
+     * are located in dependencies_{env}.json
      *
-     * @returns Object
+     * @returns Array
      */
     getModuleDependencies(moduleName)
     {
         if (this.modulesDependenciesCache.hasOwnProperty(moduleName)) {
             return this.modulesDependenciesCache[moduleName];
         }
-        this.modulesDependenciesCache[moduleName] = this.getModuleConfig(
+
+        // First try to load dependencies list from environment-specified json
+        let dependencies = this.getModuleConfig(
+            moduleName,
+            'dependencies',
+            constants.DEFAULT_CONFIG_EXT
+        ).dependencies || [];
+
+        if (!dependencies.length && this.env !== constants.ENV_PRODUCTION) {
+            // Dependencies from dependencies_{env}.json is empty
+            // Trying to read dependencies.json (production one)
+
+            this.log(`Environment deps for ${moduleName} module not found. Trying prod..`);
+
+            dependencies = this.getModuleConfig(
                 moduleName,
                 'dependencies',
-                constants.DEFAULT_CONFIG_EXT
-            ).dependencies || [];
+                constants.DEFAULT_CONFIG_EXT,
+                false
+            ).dependencies || []
+        }
+
+        this.modulesDependenciesCache[moduleName] = dependencies;
 
         return this.modulesDependenciesCache[moduleName];
     }
@@ -459,7 +548,7 @@ export class ioCore extends EventEmitter
     log(message, isReturned=false)
     {
         let currentTimestamp = moment().format();
-        let log = `\n[${currentTimestamp}] `.bold.green + `${message}`.green;
+        let log = `[${this.env}][${currentTimestamp}] `.bold.green + `${message}`.green + '\n';
         if (isReturned)
         {
             return log;
@@ -478,7 +567,7 @@ export class ioCore extends EventEmitter
     error(message, isReturned=false)
     {
         let currentTimestamp = moment().format();
-        let log = `\n[${currentTimestamp}] `.bold.red + `${message}`.red;
+        let log = `[${this.env}][${currentTimestamp}] `.bold.red + `${message}`.red + '\n';
         if (isReturned)
         {
             return log;

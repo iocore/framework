@@ -7,7 +7,14 @@ export class ServerCommand extends BaseCommand {
      */
     run()
     {
-        this.log('Running server');
-        this.container.bootstrap().listen();
+        this.container.bootstrap().listen(
+            (httpSettings) => {
+                this.log(`HTTP Server started on ${httpSettings.host}:${httpSettings.port}`);
+            },
+
+            (httpsSettings) => {
+                this.log(`HTTPS Server started on ${httpsSettings.host}:${httpsSettings.port}`);
+            }
+        );
     }
 }

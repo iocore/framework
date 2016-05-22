@@ -2,7 +2,6 @@
 
 import * as ioCore  from 'iocore/core/bootstrap';
 import * as constants  from 'iocore/core/constants';
-//import { cookieParser } from 'cookie-parser';
 let cookieParser = require('cookie-parser');
 
 export class Bootstrap extends ioCore.Bootstrap {
