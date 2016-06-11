@@ -1,15 +1,14 @@
 'use strict';
 
-import bodyParser   from 'body-parser';
-import * as ioCore  from 'iocore/core/bootstrap';
+import * as ioCoreBootstrap  from 'iocore/core/bootstrap';
 import * as constants  from 'iocore/core/constants';
+let cookieParser = require('cookie-parser');
 
-export class Bootstrap extends ioCore.Bootstrap {
+export class Bootstrap extends ioCoreBootstrap.Bootstrap {
 
     init() {
-        console.log('Installing body parser');
-        //this.container.app.use(bodyParser.json());
-		//this.container.app.use(bodyParser.urlencoded({ extended: false }));
+        console.log('Installing cookie parser');
+        this.container.app.use(cookieParser());
     }
 
     onKernelEventsSubscribe()
@@ -19,7 +18,7 @@ export class Bootstrap extends ioCore.Bootstrap {
         eventsMap[constants.KERNEL_EVENT_EXPRESS_READY] = {
             priority: constants.PRIORITY_NORMAL,
             callback: () => {
-                this.init();
+                this.init()
             }
         };
 

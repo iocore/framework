@@ -1,19 +1,32 @@
 {
   "name": "iocore",
-  "version": "1.0.0",
-  "description": "IOCore framework in front of Express",
+  "version": "1.0.1",
+  "description": "IOCore framework",
+  "bin": {
+    "iocore": "bin/iocore.js"
+  },
   "dependencies": {
-    "babel-plugin-react": "^1.0.0",
-    "babel-plugin-transform-runtime": "^6.9.0",
-    "babel-preset-es2015": "^6.9.0",
-    "babel-preset-react": "^6.5.0",
-    "babel-preset-stage-0": "^6.5.0",
     "body-parser": "^1.15.1",
     "colors": "^1.1.2",
     "cookie-parser": "^1.4.1",
     "moment": "^2.13.0",
     "morgan": "^1.7.0",
     "serve-favicon": "^2.3.0",
+    "shelljs": "^0.7.0",
     "underscore": "^1.8.3"
+  },
+  "devDependencies": {
+    "babel-cli": "^6.9.0",
+    "babel-core": "^6.9.1",
+    "babel-plugin-transform-runtime": "^6.9.0",
+    "babel-preset-es2015": "^6.9.0",
+    "babel-preset-stage-0": "^6.5.0",
+    "babel-runtime": "^6.9.2",
+    "jsdoc-babel": "^0.1.0"
+  },
+  "scripts": {
+    "compile": "./node_modules/.bin/babel ./src --optional runtime --presets stage-0,es2015 -d ./",
+    "prepublish": "npm run compile",
+    "build-doc": "esdoc -c esdoc.json"
   }
 }

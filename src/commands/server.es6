@@ -1,4 +1,4 @@
-import { BaseCommand } from 'iocore/commands/base';
+import { BaseCommand } from './base';
 
 export class ServerCommand extends BaseCommand {
 

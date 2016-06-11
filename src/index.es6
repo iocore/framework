@@ -1,0 +1,1 @@
+export {ioCore} from 'iocore/core/core';
