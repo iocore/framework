@@ -1,0 +1,7 @@
+{
+  "source": "./src",
+  "destination": "../iocore- doc",
+  "excludes": [
+      "node_modules"
+  ]
+}
